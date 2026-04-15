@@ -69,7 +69,7 @@ project/
 
 ```bash
 # Clone the repo
-git clone <your-repo-url>
+git clone <https://github.com/Onileola14/task-one.git>
 
 # Navigate into project
 cd project
