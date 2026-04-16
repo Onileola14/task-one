@@ -27,7 +27,7 @@ const createProfile = async (req, res) => {
   // Idempotency check
   const existing = await Profile.findOne({ name: lowerName });
   if (existing) {
-    return res.status(StatusCodes.OK).json({
+    return res.status(200).json({
       status: "success",
       message: "Profile already exists",
       data: existing,
