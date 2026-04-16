@@ -81,7 +81,7 @@ const createProfile = async (req, res) => {
   // 🔹 Save
   const profile = await Profile.create(profileData);
 
-  return res.status(StatusCodes.CREATED).json({
+  return res.status(201).json({
     status: "success",
     data: profile,
   });
