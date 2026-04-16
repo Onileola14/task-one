@@ -1,4 +1,4 @@
-const { StatusCodes } = require('http-status-codes');
+const { StatusCodes } = require("http-status-codes");
 const Profile = require("../models/Profile");
 const fetchApis = require("../utils/fetchApi");
 const classifyAge = require("../utils/classifyAge");
@@ -38,24 +38,27 @@ const createProfile = async (req, res) => {
   const { gender, age, country } = await fetchApis(lowerName);
 
   // 🔹 Edge Cases
+  // Genderize
   if (!gender.gender || gender.count === 0) {
-    return res.status(StatusCodes.BAD_GATEWAY).json({
+    return res.status(502).json({
       status: "error",
-      message: "Gender data unavailable",
+      message: "Genderize returned an invalid response",
     });
   }
 
+  // Agify
   if (age.age === null) {
-    return res.status(StatusCodes.BAD_GATEWAY).json({
+    return res.status(502).json({
       status: "error",
-      message: "Age data unavailable",
+      message: "Agify returned an invalid response",
     });
   }
 
+  // Nationalize
   if (!country.country || country.country.length === 0) {
-    return res.status(StatusCodes.BAD_GATEWAY).json({
+    return res.status(502).json({
       status: "error",
-      message: "Country data unavailable",
+      message: "Nationalize returned an invalid response",
     });
   }
 
@@ -86,7 +89,6 @@ const createProfile = async (req, res) => {
     data: profile,
   });
 };
-
 
 const getSingleProfile = async (req, res) => {
   const { id } = req.params;
@@ -124,7 +126,7 @@ const getAllProfiles = async (req, res) => {
   }
 
   const profiles = await Profile.find(queryObject).select(
-    "id name gender age age_group country_id"
+    "id name gender age age_group country_id",
   );
 
   return res.status(StatusCodes.OK).json({
@@ -148,5 +150,9 @@ const deleteProfile = async (req, res) => {
   return res.status(StatusCodes.NO_CONTENT).send();
 };
 
-
-module.exports = { createProfile, getSingleProfile, getAllProfiles, deleteProfile };
+module.exports = {
+  createProfile,
+  getSingleProfile,
+  getAllProfiles,
+  deleteProfile,
+};
