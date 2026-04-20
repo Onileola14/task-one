@@ -2,7 +2,14 @@ const mongoose = require("mongoose");
 
 const ProfileSchema = new mongoose.Schema({
   id: String,
-  name: { type: String, unique: true },
+  name: {
+    type: String,
+    unique: true,
+    required: true,
+    trim: true,
+    lowercase: true,
+    sparse: true,
+  },
   gender: String,
   gender_probability: Number,
   sample_size: Number,
