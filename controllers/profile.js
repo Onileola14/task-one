@@ -107,34 +107,241 @@ const getSingleProfile = async (req, res) => {
   });
 };
 
+// const getAllProfiles = async (req, res) => {
+//   const { gender, country_id, age_group } = req.query;
+
+//   const queryObject = {};
+
+//   // Case-insensitive filtering
+//   if (gender) {
+//     queryObject.gender = new RegExp(`^${gender}$`, "i");
+//   }
+
+//   if (country_id) {
+//     queryObject.country_id = new RegExp(`^${country_id}$`, "i");
+//   }
+
+//   if (age_group) {
+//     queryObject.age_group = new RegExp(`^${age_group}$`, "i");
+//   }
+
+//   const profiles = await Profile.find(queryObject).select(
+//     "id name gender age age_group country_id",
+//   );
+
+//   return res.status(StatusCodes.OK).json({
+//     status: "success",
+//     count: profiles.length,
+//     data: profiles,
+//   });
+// };
+
+// controllers/profileController.js
+
+
+// ====================== GET /api/profiles ======================
 const getAllProfiles = async (req, res) => {
-  const { gender, country_id, age_group } = req.query;
+  const {
+    gender,
+    age_group,
+    country_id,
+    min_age,
+    max_age,
+    min_gender_probability,
+    min_country_probability,
+    sort_by,
+    order = 'desc',
+    page = 1,
+    limit = 10,
+  } = req.query;
 
   const queryObject = {};
 
-  // Case-insensitive filtering
-  if (gender) {
-    queryObject.gender = new RegExp(`^${gender}$`, "i");
+  // 1. Basic Filters (exact match, case-insensitive)
+  if (gender) queryObject.gender = gender.toLowerCase();
+  if (age_group) queryObject.age_group = age_group.toLowerCase();
+  if (country_id) queryObject.country_id = country_id.toUpperCase();
+
+  // 2. Age Range
+  if (min_age || max_age) {
+    queryObject.age = {};
+    if (min_age) queryObject.age.$gte = parseInt(min_age);
+    if (max_age) queryObject.age.$lte = parseInt(max_age);
   }
 
-  if (country_id) {
-    queryObject.country_id = new RegExp(`^${country_id}$`, "i");
+  // 3. Probability Filters
+  if (min_gender_probability) {
+    queryObject.gender_probability = { $gte: parseFloat(min_gender_probability) };
+  }
+  if (min_country_probability) {
+    queryObject.country_probability = { $gte: parseFloat(min_country_probability) };
   }
 
-  if (age_group) {
-    queryObject.age_group = new RegExp(`^${age_group}$`, "i");
+  // 4. Validation for sort_by
+  const allowedSortFields = ['age', 'created_at', 'gender_probability'];
+  let sortOption = {};
+
+  if (sort_by) {
+    if (!allowedSortFields.includes(sort_by)) {
+      return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
+        status: 'error',
+        message: 'Invalid query parameters',
+      });
+    }
+    const sortOrder = order === 'asc' ? 1 : -1;
+    sortOption[sort_by] = sortOrder;
+  } else {
+    // Default sort: newest first
+    sortOption = { created_at: -1 };
   }
 
-  const profiles = await Profile.find(queryObject).select(
-    "id name gender age age_group country_id",
-  );
+  // 5. Pagination
+  const pageNum = Math.max(1, parseInt(page));
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
 
-  return res.status(StatusCodes.OK).json({
-    status: "success",
-    count: profiles.length,
-    data: profiles,
-  });
+  try {
+    const total = await Profile.countDocuments(queryObject);
+
+    const profiles = await Profile.find(queryObject)
+      .sort(sortOption)
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
+      .select('-__v'); // exclude mongoose version key
+
+    res.status(StatusCodes.OK).json({
+      status: 'success',
+      page: pageNum,
+      limit: limitNum,
+      total,
+      data: profiles,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      status: 'error',
+      message: 'Server failure',
+    });
+  }
 };
+
+// ====================== GET /api/profiles/search (Natural Language) ======================
+const searchProfiles = async (req, res) => {
+  const { q, page = 1, limit = 10 } = req.query;
+
+  if (!q || typeof q !== 'string' || q.trim() === '') {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      status: 'error',
+      message: 'Invalid query parameters',
+    });
+  }
+
+  const filters = parseNaturalLanguageQuery(q.trim());
+
+  if (!filters) {
+    return res.status(StatusCodes.BAD_REQUEST).json({
+      status: 'error',
+      message: 'Unable to interpret query',
+    });
+  }
+
+  // Reuse the same logic as getAllProfiles for pagination + sorting
+  const pageNum = Math.max(1, parseInt(page));
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+
+  try {
+    const total = await Profile.countDocuments(filters);
+
+    const profiles = await Profile.find(filters)
+      .sort({ created_at: -1 }) // default newest first for search
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
+      .select('-__v');
+
+    res.status(StatusCodes.OK).json({
+      status: 'success',
+      page: pageNum,
+      limit: limitNum,
+      total,
+      data: profiles,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      status: 'error',
+      message: 'Server failure',
+    });
+  }
+};
+
+// ====================== Rule-based Natural Language Parser ======================
+const parseNaturalLanguageQuery = (query) => {
+  const q = query.toLowerCase();
+  const filters = {};
+
+  // Gender
+  if (/\bmale(s)?\b/.test(q)) {
+    filters.gender = 'male';
+  } else if (/\bfemale(s)?\b/.test(q)) {
+    filters.gender = 'female';
+  }
+
+  // Age Group
+  if (/\b(child|children)\b/.test(q)) filters.age_group = 'child';
+  else if (/\b(teenager|teenagers)\b/.test(q)) filters.age_group = 'teenager';
+  else if (/\b(adult|adults)\b/.test(q)) filters.age_group = 'adult';
+  else if (/\b(senior|seniors)\b/.test(q)) filters.age_group = 'senior';
+
+  // Young = 16-24 (special rule)
+  if (/\byoung\b/.test(q)) {
+    filters.age = { $gte: 16, $lte: 24 };
+  }
+
+  // "above", "over", "greater than", "more than" → min_age
+  const aboveMatch = q.match(/\b(?:above|over|greater than|more than)\s*(\d+)/);
+  if (aboveMatch) {
+    const minAge = parseInt(aboveMatch[1]);
+    if (!filters.age) filters.age = {};
+    filters.age.$gte = minAge;
+  }
+
+  // Country (look for "from <country>")
+  const countryMap = {
+    nigeria: 'NG',
+    angola: 'AO',
+    kenya: 'KE',
+    benin: 'BJ',
+    ghana: 'GH',
+    egypt: 'EG',
+    tunisia: 'TN',
+    morocco: 'MA',
+    senegal: 'SN',
+    mali: 'ML',
+    niger: 'NE',
+    chad: 'TD',
+    libya: 'LY',
+    sudan: 'SD',
+    ethiopia: 'ET',
+    uganda: 'UG',
+    tanzania: 'TZ',
+  };
+
+  const fromMatch = q.match(/\bfrom\s+(\w+)/);
+  if (fromMatch) {
+    const countryName = fromMatch[1];
+    if (countryMap[countryName]) {
+      filters.country_id = countryMap[countryName];
+    }
+  }
+
+  // If no meaningful filter was extracted → cannot interpret
+  if (Object.keys(filters).length === 0) {
+    return null;
+  }
+
+  return filters;
+};
+
+
 const deleteProfile = async (req, res) => {
   const { id } = req.params;
 
@@ -155,4 +362,5 @@ module.exports = {
   getSingleProfile,
   getAllProfiles,
   deleteProfile,
+  searchProfiles,
 };
