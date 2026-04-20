@@ -8,6 +8,14 @@ const cors = require("cors");
 const express = require("express");
 
 const app = express();
+// ========================
+app.get('/', (req, res) => {
+    
+  res.send(`A backend service that accepts a name, aggregates data from external APIs (**Genderize, Agify, Nationalize**), processes the result, and stores it in a database with proper validation, idempotency, and error handling.
+`);
+});
+//=======================
+
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
