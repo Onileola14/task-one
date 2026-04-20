@@ -24,7 +24,7 @@ app.use("/api/profiles", profileRoute);
 app.use(errorHandlerMiddleware);
 app.use(notFoundError);
 
-const port = 5000;
+const port = process.env.PORT || 5000;
 
 connectDB(process.env.MONGO_URI);
 app.listen(port, () => console.log(`server listening on port ${port}....`));
