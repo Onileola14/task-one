@@ -89,6 +89,9 @@ MONGO_URI=your_mongodb_connection_string
 PORT=5000
 ```
 
+Seed your database with the 2026 profiles from this file: link <https://drive.google.com/file/d/1Up06dcS9OfUEnDj_u6OV_xTRntupFhPH/view>
+
+Re-running the seed should not create duplicate records.
 ---
 
 ## ▶️ Running the Server
