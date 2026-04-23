@@ -4,27 +4,19 @@ const fetchApis = require("../utils/fetchApi");
 const classifyAge = require("../utils/classifyAge");
 const { v7: uuidv7 } = require("uuid");
 
+// ====================== CREATE PROFILE ======================
 const createProfile = async (req, res) => {
   const { name } = req.body;
 
-  //  Validation
-  if (name === undefined || name === "") {
+  if (!name || typeof name !== "string") {
     return res.status(StatusCodes.BAD_REQUEST).json({
       status: "error",
-      message: "Name is required",
-    });
-  }
-
-  if (typeof name !== "string") {
-    return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
-      status: "error",
-      message: "Name must be a string",
+      message: "Name is required and must be a string",
     });
   }
 
   const lowerName = name.toLowerCase();
 
-  // Idempotency check
   const existing = await Profile.findOne({ name: lowerName });
   if (existing) {
     return res.status(200).json({
@@ -34,111 +26,80 @@ const createProfile = async (req, res) => {
     });
   }
 
-  // 🔹 Fetch APIs
   const { gender, age, country } = await fetchApis(lowerName);
 
-  // 🔹 Edge Cases
-  // Genderize
   if (!gender.gender || gender.count === 0) {
     return res.status(502).json({
       status: "error",
-      message: "Genderize returned an invalid response",
+      message: "Genderize failed",
     });
   }
 
-  // Agify
   if (age.age === null) {
     return res.status(502).json({
       status: "error",
-      message: "Agify returned an invalid response",
+      message: "Agify failed",
     });
   }
 
-  // Nationalize
   if (!country.country || country.country.length === 0) {
     return res.status(502).json({
       status: "error",
-      message: "Nationalize returned an invalid response",
+      message: "Nationalize failed",
     });
   }
 
-  // 🔹 Get highest probability country
   const topCountry = country.country.reduce((max, curr) =>
-    curr.probability > max.probability ? curr : max,
+    curr.probability > max.probability ? curr : max
   );
 
-  // 🔹 Build Object
-  const profileData = {
+  const countryNames = {
+    NG: "Nigeria",
+    KE: "Kenya",
+    GH: "Ghana",
+    US: "United States",
+    GB: "United Kingdom",
+  };
+
+  const profile = await Profile.create({
     id: uuidv7(),
     name: lowerName,
     gender: gender.gender,
     gender_probability: gender.probability,
-    sample_size: gender.count,
     age: age.age,
     age_group: classifyAge(age.age),
     country_id: topCountry.country_id,
+    country_name: countryNames[topCountry.country_id] || "Unknown",
     country_probability: topCountry.probability,
-    created_at: new Date().toISOString(),
-  };
+    created_at: new Date(),
+  });
 
-  // 🔹 Save
-  const profile = await Profile.create(profileData);
-
-  return res.status(201).json({
+  res.status(201).json({
     status: "success",
     data: profile,
   });
 };
 
+// ====================== GET SINGLE ======================
 const getSingleProfile = async (req, res) => {
   const { id } = req.params;
+
   const profile = await Profile.findOne({ id });
 
   if (!profile) {
-    return res.status(StatusCodes.NOT_FOUND).json({
+    return res.status(404).json({
       status: "error",
       message: "Profile not found",
     });
   }
 
-  return res.status(StatusCodes.OK).json({
+  res.status(200).json({
     status: "success",
     data: profile,
   });
 };
 
-// const getAllProfiles = async (req, res) => {
-//   const { gender, country_id, age_group } = req.query;
-
-//   const queryObject = {};
-
-//   // Case-insensitive filtering
-//   if (gender) {
-//     queryObject.gender = new RegExp(`^${gender}$`, "i");
-//   }
-
-//   if (country_id) {
-//     queryObject.country_id = new RegExp(`^${country_id}$`, "i");
-//   }
-
-//   if (age_group) {
-//     queryObject.age_group = new RegExp(`^${age_group}$`, "i");
-//   }
-
-//   const profiles = await Profile.find(queryObject).select(
-//     "id name gender age age_group country_id",
-//   );
-
-//   return res.status(StatusCodes.OK).json({
-//     status: "success",
-//     count: profiles.length,
-//     data: profiles,
-//   });
-// };
-
-// controllers/profileController.js
-
-// ====================== GET /api/profiles ======================
+// ====================== GET ALL (FILTER + SORT + PAGINATION) ======================
 const getAllProfiles = async (req, res) => {
   const {
     gender,
@@ -149,214 +110,133 @@ const getAllProfiles = async (req, res) => {
     min_gender_probability,
     min_country_probability,
     sort_by,
-    order = "desc",
+    order,
     page = 1,
     limit = 10,
   } = req.query;
 
-  const queryObject = {};
+  const query = {};
 
-  // 1. Basic Filters (exact match, case-insensitive)
-  if (gender) queryObject.gender = gender.toLowerCase();
-  if (age_group) queryObject.age_group = age_group.toLowerCase();
-  if (country_id) queryObject.country_id = country_id.toUpperCase();
+  // Filters
+  if (gender) query.gender = gender.toLowerCase();
+  if (age_group) query.age_group = age_group.toLowerCase();
+  if (country_id) query.country_id = country_id.toUpperCase();
 
-  // 2. Age Range
   if (min_age || max_age) {
-    queryObject.age = {};
-    if (min_age) queryObject.age.$gte = parseInt(min_age);
-    if (max_age) queryObject.age.$lte = parseInt(max_age);
+    query.age = {};
+    if (min_age) query.age.$gte = parseInt(min_age);
+    if (max_age) query.age.$lte = parseInt(max_age);
   }
 
-  // 3. Probability Filters
   if (min_gender_probability) {
-    queryObject.gender_probability = {
-      $gte: parseFloat(min_gender_probability),
-    };
-  }
-  if (min_country_probability) {
-    queryObject.country_probability = {
-      $gte: parseFloat(min_country_probability),
-    };
+    query.gender_probability = { $gte: parseFloat(min_gender_probability) };
   }
 
-  // 4. Validation for sort_by
-  const allowedSortFields = ["age", "created_at", "gender_probability"];
-  let sortOption = {};
+  if (min_country_probability) {
+    query.country_probability = { $gte: parseFloat(min_country_probability) };
+  }
+
+  // Sorting
+  const allowedSort = ["age", "created_at", "gender_probability"];
+  let sortOption = { created_at: -1 };
 
   if (sort_by) {
-    if (!allowedSortFields.includes(sort_by)) {
-      return res.status(StatusCodes.UNPROCESSABLE_ENTITY).json({
+    if (!allowedSort.includes(sort_by)) {
+      return res.status(422).json({
         status: "error",
         message: "Invalid query parameters",
       });
     }
-    const sortOrder = order === "asc" ? 1 : -1;
-    sortOption[sort_by] = sortOrder;
-  } else {
-    // Default sort: newest first
-    sortOption = { created_at: -1 };
+
+    const direction = order === "asc" ? 1 : -1;
+    sortOption = { [sort_by]: direction };
   }
 
-  // 5. Pagination
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
+  // Pagination
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
 
-  try {
-    const total = await Profile.countDocuments(queryObject);
+  const total = await Profile.countDocuments(query);
 
-    const profiles = await Profile.find(queryObject)
-      .sort(sortOption)
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .select("-__v"); // exclude mongoose version key
+  const profiles = await Profile.find(query)
+    .sort(sortOption)
+    .skip((pageNum - 1) * limitNum)
+    .limit(limitNum)
+    .select("-__v");
 
-    res.status(StatusCodes.OK).json({
-      status: "success",
-      page: pageNum,
-      limit: limitNum,
-      total,
-      data: profiles,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      status: "error",
-      message: "Server failure",
-    });
-  }
+  res.status(200).json({
+    status: "success",
+    page: pageNum,
+    limit: limitNum,
+    total,
+    data: profiles,
+  });
 };
 
-// ====================== GET /api/profiles/search (Natural Language) ======================
-const searchProfiles = async (req, res) => {
-  const { q, page = 1, limit = 10 } = req.query;
-
-  if (!q || typeof q !== "string" || q.trim() === "") {
-    return res.status(StatusCodes.BAD_REQUEST).json({
-      status: "error",
-      message: "Invalid query parameters",
-    });
-  }
-
-  const filters = parseNaturalLanguageQuery(q.trim());
-
-  if (!filters) {
-    return res.status(StatusCodes.BAD_REQUEST).json({
-      status: "error",
-      message: "Unable to interpret query",
-    });
-  }
-
-  // Reuse the same logic as getAllProfiles for pagination + sorting
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(50, Math.max(1, parseInt(limit)));
-
-  try {
-    const total = await Profile.countDocuments(filters);
-
-    const profiles = await Profile.find(filters)
-      .sort({ created_at: -1 }) // default newest first for search
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .select("-__v");
-
-    res.status(StatusCodes.OK).json({
-      status: "success",
-      page: pageNum,
-      limit: limitNum,
-      total,
-      data: profiles,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      status: "error",
-      message: "Server failure",
-    });
-  }
-};
-
-// ====================== Rule-based Natural Language Parser ===================
-// ====================== ======================
+// ====================== NLP PARSER ======================
 const parseNaturalLanguageQuery = (query) => {
   if (!query || typeof query !== "string") return null;
 
   const q = query.toLowerCase().trim();
-
   const filters = {};
 
   // Gender
-  if (/\bmale(s)?\b/i.test(q)) {
-    filters.gender = "male";
-  } else if (/\bfemale(s)?\b/i.test(q)) {
-    filters.gender = "female";
+  const genders = [];
+  if (/\bmale(s)?\b/.test(q)) genders.push("male");
+  if (/\bfemale(s)?\b/.test(q)) genders.push("female");
+
+  if (genders.length === 1) {
+    filters.gender = genders[0];
+  } else if (genders.length > 1) {
+    filters.gender = { $in: genders };
   }
 
-  // Age Group
-  if (/\b(child|children)\b/.test(q)) filters.age_group = "child";
-  if (/\b(teenager|teenagers)\b/.test(q)) filters.age_group = "teenager";
-  if (/\b(adult|adults)\b/.test(q)) filters.age_group = "adult";
-  if (/\b(senior|seniors)\b/.test(q)) filters.age_group = "senior";
+  // Age group
+  if (/\bchild|children\b/.test(q)) filters.age_group = "child";
+  if (/\bteenager|teenagers\b/.test(q)) filters.age_group = "teenager";
+  if (/\badult|adults\b/.test(q)) filters.age_group = "adult";
+  if (/\bsenior|seniors\b/.test(q)) filters.age_group = "senior";
 
-  // "young" special rule → 16-24
+  // Age rules
   if (/\byoung\b/.test(q)) {
-    filters.age = { $gte: 16, $lte: 24 };
+    filters.age = { ...(filters.age || {}), $gte: 16, $lte: 24 };
   }
 
-  // "above", "over", "greater than", "more than" → min_age
-  const aboveMatch = q.match(
-    /\b(?:above|over|greater than|more than)\s*(\d+)/i,
-  );
-  if (aboveMatch) {
-    const minAge = parseInt(aboveMatch[1]);
-    if (!filters.age) filters.age = {};
-    filters.age.$gte = minAge;
+  const above = q.match(/\b(?:above|over|greater than|more than)\s*(\d+)/);
+  if (above) {
+    filters.age = { ...(filters.age || {}), $gte: parseInt(above[1]) };
   }
 
-  // Country - improved detection for "from nigeria", "people from nigeria", "from Nigeria"
+  const below = q.match(/\b(?:below|under|less than)\s*(\d+)/);
+  if (below) {
+    filters.age = { ...(filters.age || {}), $lte: parseInt(below[1]) };
+  }
+
+  // Country
   const countryMap = {
     nigeria: "NG",
-    angola: "AO",
     kenya: "KE",
-    benin: "BJ",
     ghana: "GH",
-    egypt: "EG",
-    tunisia: "TN",
-    morocco: "MA",
-    senegal: "SN",
-    mali: "ML",
-    niger: "NE",
-    chad: "TD",
-    libya: "LY",
-    sudan: "SD",
-    ethiopia: "ET",
-    uganda: "UG",
-    tanzania: "TZ",
+    usa: "US",
+    uk: "GB",
   };
 
-  // Better regex for country
-  const countryMatch =
-    q.match(/\bfrom\s+(\w+)/i) || q.match(/\bpeople from\s+(\w+)/i);
-  if (countryMatch) {
-    const countryName = countryMatch[1].toLowerCase();
-    if (countryMap[countryName]) {
-      filters.country_id = countryMap[countryName];
+  for (const key in countryMap) {
+    if (new RegExp(`\\b${key}\\b`).test(q)) {
+      filters.country_id = countryMap[key];
     }
   }
 
-  // If nothing was parsed at all → return null (so we can show error)
-  if (Object.keys(filters).length === 0) {
-    return null;
-  }
+  if (Object.keys(filters).length === 0) return null;
 
   return filters;
 };
 
-// ====================== SEARCH ENDPOINT ======================
+// ====================== SEARCH ======================
 const searchProfiles = async (req, res) => {
   const { q, page = 1, limit = 10 } = req.query;
 
-  if (!q || typeof q !== "string" || q.trim() === "") {
+  if (!q || typeof q !== "string") {
     return res.status(400).json({
       status: "error",
       message: "Invalid query parameters",
@@ -372,38 +252,49 @@ const searchProfiles = async (req, res) => {
     });
   }
 
-  const pageNum = Math.max(1, parseInt(page));
+  const pageNum = Math.max(1, parseInt(page) || 1);
   const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 10));
 
-  try {
-    const total = await Profile.countDocuments(filters);
+  const total = await Profile.countDocuments(filters);
 
-    const profiles = await Profile.find(filters)
-      .sort({ created_at: -1 })
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum)
-      .select("-__v");
+  const profiles = await Profile.find(filters)
+    .sort({ created_at: -1 })
+    .skip((pageNum - 1) * limitNum)
+    .limit(limitNum)
+    .select("-__v");
 
-    res.status(200).json({
-      status: "success",
-      page: pageNum,
-      limit: limitNum,
-      total,
-      data: profiles,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
+  res.status(200).json({
+    status: "success",
+    page: pageNum,
+    limit: limitNum,
+    total,
+    data: profiles,
+  });
+};
+
+// ====================== DELETE ======================
+const deleteProfile = async (req, res) => {
+  const { id } = req.params;
+
+  const profile = await Profile.findOneAndDelete({ id });
+
+  if (!profile) {
+    return res.status(404).json({
       status: "error",
-      message: "Server failure",
+      message: "Profile not found",
     });
   }
+
+  res.status(200).json({
+    status: "success",
+    message: "Profile deleted",
+  });
 };
 
 module.exports = {
   createProfile,
   getSingleProfile,
   getAllProfiles,
-  deleteProfile,
   searchProfiles,
+  deleteProfile,
 };
