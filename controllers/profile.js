@@ -71,7 +71,7 @@ const createProfile = async (req, res) => {
     country_id: topCountry.country_id,
     country_name: countryNames[topCountry.country_id] || "Unknown",
     country_probability: topCountry.probability,
-    created_at: new Date(),
+    created_at: ISODateString(new Date()),
   });
 
   res.status(201).json({
