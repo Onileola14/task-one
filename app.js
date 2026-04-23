@@ -10,8 +10,7 @@ const express = require("express");
 const app = express();
 // ========================
 app.get('/', (req, res) => {
-  res.send(`A backend service that accepts a name, aggregates data from external APIs (**Genderize, Agify, Nationalize**), processes the result, and stores it in a database with proper validation, idempotency, and error handling.
-`);
+  res.send(`A backend service that aggregates user profile data from external APIs (**Genderize, Agify, Nationalize**) and exposes a powerful **query engine** for filtering, sorting, pagination, and natural language search.`);
 });
 //=======================
 
