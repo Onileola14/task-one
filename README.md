@@ -1,12 +1,12 @@
+# 📌 Profile Aggregation & Intelligence Query API
 
-
-# 📌 Profile Aggregation API
-
-A backend service that accepts a name, aggregates data from external APIs (**Genderize, Agify, Nationalize**), processes the result, and stores it in a database with proper validation, idempotency, and error handling.
+A backend service that aggregates user profile data from external APIs (**Genderize, Agify, Nationalize**) and exposes a powerful **query engine** for filtering, sorting, pagination, and natural language search.
 
 ---
 
 ## 🚀 Features
+
+### 🔹 Data Aggregation
 
 * Accepts user name via `POST /api/profiles`
 * Fetches data from:
@@ -18,12 +18,90 @@ A backend service that accepts a name, aggregates data from external APIs (**Gen
 * Classifies age into groups
 * Stores result in database
 * Ensures **idempotency** (no duplicate names)
-* Handles edge cases and validation properly
-* Uses **UUID v7** for IDs
-* Uses **UTC ISO 8601 timestamps**
-* Global error handling with `express-async-errors`
-* Standardized HTTP responses with `http-status-codes`
-* CORS enabled (`Access-Control-Allow-Origin: *`)
+
+---
+
+### 🔹 Query Engine (Core Feature)
+
+#### 1. Advanced Filtering
+
+Supports:
+
+* `gender`
+* `age_group`
+* `country_id`
+* `min_age`, `max_age`
+* `min_gender_probability`
+* `min_country_probability`
+
+Example:
+
+```
+GET /api/profiles?gender=male&country_id=NG&min_age=25
+```
+
+---
+
+#### 2. Sorting
+
+Supports:
+
+* `age`
+* `created_at`
+* `gender_probability`
+
+Example:
+
+```
+GET /api/profiles?sort_by=age&order=desc
+```
+
+---
+
+#### 3. Pagination
+
+* `page` (default: 1)
+* `limit` (default: 10, max: 50)
+
+Example:
+
+```
+GET /api/profiles?page=2&limit=20
+```
+
+Response format:
+
+```json
+{
+  "status": "success",
+  "page": 1,
+  "limit": 10,
+  "total": 2026,
+  "data": [ ... ]
+}
+```
+
+---
+
+#### 4. Natural Language Search (🔥 Core Feature)
+
+**Endpoint:**
+
+```
+GET /api/profiles/search?q=
+```
+
+Examples:
+
+```
+/api/profiles/search?q=young males
+/api/profiles/search?q=females above 30
+/api/profiles/search?q=people from nigeria
+/api/profiles/search?q=adult males from kenya
+/api/profiles/search?q=male and female teenagers above 17
+```
+
+💡 The system converts plain English queries into database filters.
 
 ---
 
@@ -33,7 +111,7 @@ A backend service that accepts a name, aggregates data from external APIs (**Gen
 * Express.js
 * MongoDB (Mongoose)
 * Axios
-* UUID
+* UUID v7
 * express-async-errors
 * http-status-codes
 * CORS
@@ -68,13 +146,8 @@ project/
 ## ⚙️ Installation
 
 ```bash
-# Clone the repo
-git clone <https://github.com/Onileola14/task-one.git>
-
-# Navigate into project
-cd project
-
-# Install dependencies
+git clone https://github.com/Onileola14/task-one.git
+cd task-one
 npm install
 ```
 
@@ -82,16 +155,25 @@ npm install
 
 ## 🔐 Environment Variables
 
-Create a `.env` file in the root directory:
+Create a `.env` file:
 
 ```
 MONGO_URI=your_mongodb_connection_string
 PORT=5000
 ```
 
-Seed your database with the 2026 profiles from this file: link <https://drive.google.com/file/d/1Up06dcS9OfUEnDj_u6OV_xTRntupFhPH/view>
+---
 
-Re-running the seed should not create duplicate records.
+## 🌱 Data Seeding
+
+Seed your database with the 2026 profiles:
+
+```
+https://drive.google.com/file/d/1Up06dcS9OfUEnDj_u6OV_xTRntupFhPH/view
+```
+
+Re-running the seed will not create duplicate records.
+
 ---
 
 ## ▶️ Running the Server
@@ -100,7 +182,7 @@ Re-running the seed should not create duplicate records.
 npm start
 ```
 
-Server will run on:
+Server runs on:
 
 ```
 http://localhost:5000
@@ -108,13 +190,11 @@ http://localhost:5000
 
 ---
 
-## 📡 API Endpoint
+## 📡 API Endpoints
 
 ### ➤ Create Profile
 
 **POST** `/api/profiles`
-
-### Request Body
 
 ```json
 {
@@ -124,37 +204,41 @@ http://localhost:5000
 
 ---
 
-## ✅ Success Response
+### ➤ Get All Profiles
 
-```json
-{
-  "status": "success",
-  "data": {
-    "id": "b3f9c1e2-7d4a-4c91-9c2a-1f0a8e5b6d12",
-    "name": "ella",
-    "gender": "female",
-    "gender_probability": 0.99,
-    "sample_size": 1234,
-    "age": 46,
-    "age_group": "adult",
-    "country_id": "DRC",
-    "country_probability": 0.85,
-    "created_at": "2026-04-01T12:00:00Z"
-  }
-}
-```
+**GET** `/api/profiles`
+
+Supports filtering, sorting, and pagination.
+
+---
+
+### ➤ Natural Language Search
+
+**GET** `/api/profiles/search?q=`
+
+---
+
+### ➤ Get Single Profile
+
+**GET** `/api/profiles/:id`
+
+---
+
+### ➤ Delete Profile
+
+**DELETE** `/api/profiles/:id`
 
 ---
 
 ## 🔁 Idempotency Behavior
 
-If the same name is submitted again:
+Submitting the same name twice:
 
 ```json
 {
   "status": "success",
   "message": "Profile already exists",
-  "data": { ...existing profile }
+  "data": { ... }
 }
 ```
 
@@ -162,7 +246,7 @@ If the same name is submitted again:
 
 ## ❌ Error Handling
 
-All errors follow this format:
+All errors follow:
 
 ```json
 {
@@ -175,73 +259,52 @@ All errors follow this format:
 
 ## ⚠️ Validation Rules
 
-| Condition             | Status Code | Message               |
-| --------------------- | ----------- | --------------------- |
-| Missing or empty name | 400         | Name is required      |
-| Name is not a string  | 422         | Name must be a string |
-
----
-
-## 🚨 Edge Cases
-
-| Scenario                    | Response |
-| --------------------------- | -------- |
-| Gender is null or count = 0 | 404      |
-| Age is null                 | 404      |
-| No country data             | 404      |
+| Condition            | Status Code |
+| -------------------- | ----------- |
+| Missing name         | 400         |
+| Invalid type         | 400         |
+| Invalid query params | 422         |
 
 ---
 
 ## 🧠 Processing Logic
 
-* **Genderize**
+### Genderize
 
-  * Extract: `gender`, `probability`, `count → sample_size`
+* Extract: `gender`, `probability`, `count`
 
-* **Agify**
+### Agify
 
-  * Extract: `age`
-  * Classify:
+* Extract: `age`
+* Classification:
 
-    * 0–12 → child
-    * 13–19 → teenager
-    * 20–59 → adult
-    * 60+ → senior
+  * 0–12 → child
+  * 13–19 → teenager
+  * 20–59 → adult
+  * 60+ → senior
 
-* **Nationalize**
+### Nationalize
 
-  * Select country with highest probability
-
----
-
-## 🧩 Middleware & Utilities
-
-* `express-async-errors` → handles async errors globally
-* `http-status-codes` → cleaner status code usage
-* `cors` → allows public API access
-* Custom utilities:
-
-  * API aggregation
-  * Age classification
+* Select country with highest probability
 
 ---
 
 ## 📌 Important Notes
 
-* All timestamps are in **UTC (ISO 8601 format)**
-* IDs are generated using **UUID v7**
-* Duplicate names are prevented (unique constraint)
-* API responses strictly follow the required structure
+* All timestamps use **UTC**
+* IDs use **UUID v7**
+* Duplicate names are prevented
+* Filtering conditions are **combined (AND logic)**
 
 ---
 
 ## 💡 Possible Improvements
 
-* Add Redis caching for API responses
-* Add rate limiting
-* Add request logging (Winston/Morgan)
-* Add unit & integration tests
-* Dockerize the application
+* Redis caching
+* Rate limiting
+* Logging (Winston/Morgan)
+* Unit & integration tests
+* Docker support
 
 ---
 
