@@ -4,6 +4,12 @@ const connectDB = require("./db/connectDB");
 const errorHandlerMiddleware = require("./middlewares/errorHandlerMiddleware");
 const notFoundError = require("./middlewares/not-found-error");
 const profileRoute = require("./routes/profileRoute");
+const authRoutes = require("./routes/authRoutes");
+
+
+const authMiddleware = require("./middlewares/authMiddleware");
+const versionMiddleware = require("./middlewares/versionMiddleware");
+
 const cors = require("cors");
 const express = require("express");
 
@@ -16,6 +22,12 @@ app.get('/', (req, res) => {
 
 app.use(cors({ origin: "*" }));
 app.use(express.json());
+
+
+app.use("/api/auth", authRoutes);
+
+app.use(versionMiddleware);
+app.use(authMiddleware); // 🔥 global auth (optional, can be moved to specific routes)
 
 app.use("/api/profiles", profileRoute);
 

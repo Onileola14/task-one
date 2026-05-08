@@ -5,7 +5,7 @@
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start" : "node app"
+    "start": "node app"
   },
   "author": "",
   "license": "ISC",
@@ -17,6 +17,7 @@
     "express-async-error": "^0.0.2",
     "http-status-code": "^2.1.0",
     "http-status-codes": "^2.3.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.4.1",
     "uuid": "^13.0.0"
   }
