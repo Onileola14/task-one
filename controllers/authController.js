@@ -144,6 +144,20 @@ const refreshToken = async (req, res) => {
     access_token: newAccessToken,
     refresh_token: newRefreshToken,
   });
+
+  res.cookie("access_token", accessToken, {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+  });
+
+  res.cookie("refresh_token", refreshToken, {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+  });
+
+  res.redirect("http://localhost:3000/dashboard");
 };
 
 // 🔹 Logout
