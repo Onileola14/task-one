@@ -17,7 +17,6 @@ const generateRefreshToken = () => {
   return crypto.randomBytes(40).toString("hex");
 };
 
-// 🔥 NEW
 const getRefreshTokenExpiry = () => {
   return new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 };

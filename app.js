@@ -32,7 +32,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 
 app.use(versionMiddleware);
-app.use(authMiddleware); // 🔥 global auth (optional, can be moved to specific routes)
+app.use(authMiddleware);
 
 app.use("/api/profiles", profileRoute);
 
