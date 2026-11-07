@@ -2,7 +2,7 @@
 
 A backend service that aggregates user profile data from external APIs (**Genderize, Agify, Nationalize**) and exposes a powerful **query engine** for filtering, sorting, pagination, and natural language search.
 
----
+--
 
 ## 🚀 Features
 
